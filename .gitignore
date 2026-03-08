@@ -1,0 +1,38 @@
+# ── Secretos y entorno local ─────────────────────────────────────────────────
+.env
+.streamlit/secrets.toml
+
+# ── Entorno virtual ───────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# ── Base de datos local ───────────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+
+# ── Caché de datos en disco ───────────────────────────────────────────────────
+techpulse/data/market_cache.json
+techpulse/data/kwp_cache.json
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+
+# ── Playwright browsers (se instalan en runtime en el servidor) ───────────────
+playwright/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
