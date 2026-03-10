@@ -1,12 +1,14 @@
 from __future__ import annotations
-"""Scrapes Amazon España bestseller and new-releases charts using Playwright.
+"""Scrapes Amazon España bestseller and new-releases charts.
 
-Amazon renders products via JavaScript — simple HTTP scraping returns an empty grid.
-Playwright renders the full page before parsing, like a real browser.
+Uses httpx with realistic browser headers.  Amazon bestseller pages include
+product data in the initial server-rendered HTML, so a headless browser is
+*not* required.
 """
 import logging
 from dataclasses import dataclass
 
+import httpx
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,18 @@ _NEW_RELEASES_URLS: dict[str, str] = {
 
 CATEGORY_LABELS = list(_BESTSELLERS_URLS.keys())
 
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "no-cache",
+}
+
 
 @dataclass
 class AmazonProduct:
@@ -46,11 +60,11 @@ BestsellerProduct = AmazonProduct
 
 
 def _parse_page(html: str, limit: int) -> list[AmazonProduct]:
-    """Extract products from a fully-rendered Amazon bestsellers/new-releases page."""
+    """Extract products from an Amazon bestsellers/new-releases page."""
     soup = BeautifulSoup(html, "html.parser")
     results: list[AmazonProduct] = []
 
-    # After JS renders, products live in zg-grid-general-faceout divs
+    # Products live in zg-grid-general-faceout divs
     items = (
         soup.select("div.zg-grid-general-faceout")
         or soup.select("li.zg-item-immersion")
@@ -104,48 +118,25 @@ def _parse_page(html: str, limit: int) -> list[AmazonProduct]:
 
 
 def _fetch_amazon(url: str, context_label: str, limit: int) -> tuple[list[AmazonProduct], str | None]:
-    """Shared Playwright fetch + parse logic for any Amazon zg/nr page."""
+    """Fetch an Amazon page via httpx and parse products."""
     try:
-        from playwright.sync_api import sync_playwright  # type: ignore
-    except ImportError:
-        return [], "Playwright no instalado. Ejecuta: pip install playwright && playwright install chromium"
-
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                locale="es-ES",
-                timezone_id="Europe/Madrid",
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                ),
-            )
-            page = context.new_page()
-            page.goto(url, wait_until="domcontentloaded", timeout=20_000)
-
-            try:
-                page.wait_for_selector(
-                    "div.zg-grid-general-faceout, li.zg-item-immersion",
-                    timeout=10_000,
-                )
-            except Exception:
-                pass  # Parse whatever loaded
-
-            html = page.content()
-            browser.close()
+        resp = httpx.get(url, headers=_HEADERS, follow_redirects=True, timeout=20)
+        resp.raise_for_status()
+        html = resp.text
 
         products = _parse_page(html, limit)
         if not products:
             return [], (
-                "No se encontraron productos tras renderizar la página. "
-                "Amazon puede haber actualizado su estructura."
+                "No se encontraron productos. "
+                "Amazon puede haber bloqueado la petición o cambiado su estructura."
             )
         return products, None
 
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Amazon HTTP error ({context_label}): {e.response.status_code}")
+        return [], f"Amazon devolvió HTTP {e.response.status_code}"
     except Exception as e:
-        logger.warning(f"Amazon Playwright scrape failed ({context_label}): {e}")
+        logger.warning(f"Amazon scrape failed ({context_label}): {e}")
         return [], f"Error al cargar Amazon: {e}"
 
 
