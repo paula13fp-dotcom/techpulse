@@ -149,44 +149,70 @@ _TRENDS_KEYWORDS: dict[str, list[str]] = {
 def _fetch_trends(cat: str, kws: tuple[str, ...]) -> dict:
     from pytrends.request import TrendReq
     import time as _time
+    import random
 
     pt = TrendReq(hl="es-ES", tz=60, timeout=(10, 30))
     all_top:    list[dict] = []
     all_rising: list[dict] = []
 
+    # Use only the first 15 keywords to reduce API calls and avoid rate limits
+    kws = kws[:15]
+    consecutive_errors = 0
+
     for i in range(0, len(kws), 5):
         chunk = list(kws[i: i + 5])
-        try:
-            pt.build_payload(chunk, timeframe="now 7-d", geo="ES")
-            related = pt.related_queries()
-            for kw, data in related.items():
-                top_df    = data.get("top")
-                rising_df = data.get("rising")
-                if top_df is not None and not top_df.empty:
-                    for _, row in top_df.head(12).iterrows():
-                        all_top.append({
-                            "Búsqueda":        str(row["query"]).title(),
-                            "Interés (0-100)": int(row["value"]),
-                            "Término origen":  kw,
-                        })
-                if rising_df is not None and not rising_df.empty:
-                    for _, row in rising_df.head(12).iterrows():
-                        val = row["value"]
-                        val_str = (
-                            "🔥 Breakout (+5000%+)"
-                            if isinstance(val, str)
-                            else f"+{int(val):,}%"
-                        )
-                        all_rising.append({
-                            "Búsqueda":       str(row["query"]).title(),
-                            "Crecimiento":    val_str,
-                            "Valor":          int(val) if isinstance(val, (int, float)) else 999999,
-                            "Término origen": kw,
-                        })
-            if i + 5 < len(kws):
-                _time.sleep(1.2)
-        except Exception:
-            continue
+
+        # Retry up to 2 times with exponential backoff
+        success = False
+        for attempt in range(3):
+            try:
+                pt.build_payload(chunk, timeframe="now 7-d", geo="ES")
+                related = pt.related_queries()
+                for kw, data in related.items():
+                    top_df    = data.get("top")
+                    rising_df = data.get("rising")
+                    if top_df is not None and not top_df.empty:
+                        for _, row in top_df.head(12).iterrows():
+                            all_top.append({
+                                "Búsqueda":        str(row["query"]).title(),
+                                "Interés (0-100)": int(row["value"]),
+                                "Término origen":  kw,
+                            })
+                    if rising_df is not None and not rising_df.empty:
+                        for _, row in rising_df.head(12).iterrows():
+                            val = row["value"]
+                            val_str = (
+                                "🔥 Breakout (+5000%+)"
+                                if isinstance(val, str)
+                                else f"+{int(val):,}%"
+                            )
+                            all_rising.append({
+                                "Búsqueda":       str(row["query"]).title(),
+                                "Crecimiento":    val_str,
+                                "Valor":          int(val) if isinstance(val, (int, float)) else 999999,
+                                "Término origen": kw,
+                            })
+                success = True
+                consecutive_errors = 0
+                break
+            except Exception as e:
+                err_str = str(e).lower()
+                if "429" in err_str or "too many" in err_str:
+                    # Rate limited — wait longer before retrying
+                    wait = (attempt + 1) * 5 + random.uniform(1, 3)
+                    _time.sleep(wait)
+                else:
+                    break  # Non-rate-limit error, skip this chunk
+
+        if not success:
+            consecutive_errors += 1
+            # If 2 consecutive chunks fail, stop to avoid hammering Google
+            if consecutive_errors >= 2:
+                break
+
+        if i + 5 < len(kws):
+            # Random delay 3-6s between batches to avoid rate limits
+            _time.sleep(3 + random.uniform(0, 3))
 
     seen_top: dict[str, dict] = {}
     for item in all_top:
