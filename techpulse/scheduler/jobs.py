@@ -22,6 +22,7 @@ def run_all_scrapers():
     from techpulse.scrapers.xda_scraper import XDAScraper
     from techpulse.scrapers.gsmarena_scraper import GSMArenaScraper
     from techpulse.scrapers.tiktok_scraper import TikTokScraper
+    from techpulse.scrapers.x_scraper import XScraper
     from techpulse.scrapers.techblogs_scraper import (
         # Blogs ES (originales)
         XatakaScraper, XatakaMovilScraper, MuyComputerScraper,
@@ -40,6 +41,7 @@ def run_all_scrapers():
         XDAScraper(),
         GSMArenaScraper(),
         TikTokScraper(),
+        XScraper(),
         # Blogs ES
         XatakaScraper(),
         XatakaMovilScraper(),

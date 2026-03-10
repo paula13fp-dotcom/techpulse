@@ -21,6 +21,7 @@ build/
 # ── Caché de datos en disco ───────────────────────────────────────────────────
 techpulse/data/market_cache.json
 techpulse/data/kwp_cache.json
+techpulse/data/x_cookies.json
 
 # ── Logs ──────────────────────────────────────────────────────────────────────
 logs/

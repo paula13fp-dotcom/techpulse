@@ -160,7 +160,35 @@ PRODUCT_KEYWORDS: dict[str, str] = {
     "galaxy tab s11": "Samsung Galaxy Tab S11",
 }
 
+# X / Twitter search queries per category
+X_QUERIES = {
+    "phones": [
+        "iPhone 17 leak", "iPhone 17 Pro", "iPhone 17 Air",
+        "Samsung Galaxy S26", "Galaxy S26 Ultra",
+        "Pixel 10", "Pixel 10 Pro",
+        "best smartphone 2026", "upcoming phones 2026",
+        "OnePlus 14", "Xiaomi 16",
+    ],
+    "smartwatches": [
+        "Apple Watch Series 11", "Apple Watch Ultra 3",
+        "Galaxy Watch 8", "Pixel Watch 4",
+        "best smartwatch 2026",
+    ],
+    "tablets": [
+        "iPad Pro M5", "iPad Air M3",
+        "Galaxy Tab S11", "best tablet 2026",
+    ],
+}
+
+# X / Twitter accounts to monitor (tech leakers & reviewers)
+X_ACCOUNTS = [
+    "markgurman", "UniverseIce", "evleaks", "OnLeaks",
+    "MishaalRahman", "SnoopyTech_", "rabornes",
+    "MajinBuOfficial", "FrontTron", "ZacksJerryRig",
+]
+
 # Rate limits
 REDDIT_REQUESTS_PER_MINUTE = 60
 YOUTUBE_DAILY_QUOTA = 10_000
+X_SEARCHES_PER_RUN = 40
 SCRAPE_DELAY_SECONDS = 2.0  # Between requests to polite-scrape forums

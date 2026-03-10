@@ -28,6 +28,11 @@ class Settings:
     # Anthropic
     ANTHROPIC_API_KEY: str | None = _get("ANTHROPIC_API_KEY")
 
+    # X / Twitter (twikit)
+    X_USERNAME: str | None = _get("X_USERNAME")
+    X_EMAIL: str | None = _get("X_EMAIL")
+    X_PASSWORD: str | None = _get("X_PASSWORD")
+
     # Scraping
     SCRAPE_INTERVAL_HOURS: int = int(_get("SCRAPE_INTERVAL_HOURS", "6"))
     MAX_POSTS_PER_RUN: int = int(_get("MAX_POSTS_PER_RUN", "100"))
@@ -50,6 +55,10 @@ class Settings:
         return bool(cls.ANTHROPIC_API_KEY)
 
     @classmethod
+    def has_x(cls) -> bool:
+        return bool(cls.X_USERNAME and cls.X_EMAIL and cls.X_PASSWORD)
+
+    @classmethod
     def configured_sources(cls) -> list[str]:
         sources = []
         if cls.has_reddit():
@@ -60,6 +69,9 @@ class Settings:
         sources.extend(["xda", "gsmarena"])
         # TikTok always attempted (may fail gracefully)
         sources.append("tiktok")
+        # X / Twitter (twikit)
+        if cls.has_x():
+            sources.append("x")
         return sources
 
 

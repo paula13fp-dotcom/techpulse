@@ -18,8 +18,13 @@ from techpulse.scrapers.base import BaseScraper
 from techpulse.utils.rate_limiter import RateLimiter
 
 _HEADERS = {
-    "User-Agent": "TechPulse/1.0 (personal tech tracker; contact via github)",
-    "Accept": "application/json",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/html;q=0.9",
+    "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
 }
 
 

@@ -47,6 +47,7 @@ def _seed(engine):
             ('xda',         'XDA Forums',    'https://xdadevelopers.com'),
             ('gsmarena',    'GSMArena',      'https://www.gsmarena.com'),
             ('tiktok',      'TikTok',        'https://www.tiktok.com'),
+            ('x',           'X (Twitter)',   'https://x.com'),
             -- Blogs ES (originales)
             ('xataka',         'Xataka',           'https://www.xataka.com'),
             ('xatakamovil',    'Xataka Movil',     'https://www.xatakamovil.com'),
