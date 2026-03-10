@@ -7,6 +7,7 @@ from techpulse.database.queries import (
 from techpulse.ui_style import inject_css
 
 st.set_page_config(page_title="Dashboard · TechPulse", page_icon="🏠", layout="wide")
+from techpulse.auth import require_login; require_login()  # noqa: E702
 inject_css()
 st.title("🏠 Análisis")
 

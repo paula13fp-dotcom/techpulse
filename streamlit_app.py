@@ -55,9 +55,14 @@ def _boot() -> bool:
 
 
 _boot()
+
+# ── 4. Auth gate ──────────────────────────────────────────────────────────
+from techpulse.auth import require_login  # noqa: E402
+require_login()
+
 inject_css()
 
-# ── 4. Home page ─────────────────────────────────────────────────────────────
+# ── 5. Home page ─────────────────────────────────────────────────────────────
 st.title("📡 TechPulse")
 st.markdown(
     "**Monitorización de tendencias tech en tiempo real** — "
