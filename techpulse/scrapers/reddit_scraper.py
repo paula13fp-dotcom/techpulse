@@ -1,16 +1,13 @@
 from __future__ import annotations
-"""Reddit scraper — uses public RSS feeds (no API key required) with optional
-PRAW fallback if credentials are configured.
+"""Reddit scraper — uses old.reddit.com JSON endpoints (no API key required).
 
-Reddit exposes public JSON/RSS endpoints:
-  https://www.reddit.com/r/<sub>/hot.json?limit=25
-No authentication needed for read-only public data.
+old.reddit.com is more permissive with server-side requests than www.reddit.com
+which aggressively blocks non-browser traffic from cloud IPs.
 """
 import time
 from datetime import datetime, timezone
 
 import httpx
-from bs4 import BeautifulSoup
 
 from techpulse.config.settings import settings
 from techpulse.config.constants import SUBREDDITS
@@ -23,7 +20,7 @@ _HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/125.0.0.0 Safari/537.36"
     ),
-    "Accept": "application/json, text/html;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
 }
 
@@ -33,7 +30,7 @@ class RedditScraper(BaseScraper):
 
     def __init__(self):
         super().__init__()
-        self._limiter = RateLimiter(calls_per_second=0.5)  # 1 req / 2s — well within limits
+        self._limiter = RateLimiter(calls_per_second=0.5)  # 1 req / 2s
 
     def fetch(self) -> list[dict]:
         items = []
@@ -59,8 +56,16 @@ class RedditScraper(BaseScraper):
         return items
 
     def _fetch_sub(self, client: httpx.Client, sub: str, limit: int) -> list[dict]:
-        url = f"https://www.reddit.com/r/{sub}/hot.json?limit={limit}&raw_json=1"
+        # Use old.reddit.com — much less aggressive blocking of server IPs
+        url = f"https://old.reddit.com/r/{sub}/hot.json?limit={limit}&raw_json=1"
         resp = client.get(url)
+
+        # Reddit sometimes returns HTML login page instead of JSON
+        content_type = resp.headers.get("content-type", "")
+        if "json" not in content_type:
+            self.logger.warning(f"r/{sub}: got non-JSON response ({content_type})")
+            return []
+
         resp.raise_for_status()
         data = resp.json()
 

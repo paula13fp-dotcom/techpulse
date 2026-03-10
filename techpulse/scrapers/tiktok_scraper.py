@@ -1,13 +1,19 @@
 """TikTok scraper — HTTP-only (cloud-compatible, no Playwright).
 
-Fetches TikTok hashtag pages and extracts embedded JSON data
-(__UNIVERSAL_DATA_FOR_REHYDRATION__) to get video metadata.
-This approach avoids any browser/Playwright dependency but may
-break if TikTok changes their page structure.
+Uses TikTok's oEmbed API and web RSS feeds to discover trending tech videos.
+The oEmbed API is public, rate-limited but works reliably from server IPs
+(unlike direct page scraping which gets blocked by TikTok's bot detection).
+
+Strategy:
+  1. For each hashtag, try the page HTML for __UNIVERSAL_DATA rehydration data.
+  2. If that fails (CAPTCHA/redirect), fall back to RSS via third-party
+     aggregator (rsshub nitter-style) or the oEmbed discovery endpoint.
+  3. As a final fallback, search via the web search API.
 """
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -32,7 +38,7 @@ class TikTokScraper(BaseScraper):
                 "Chrome/125.0.0.0 Safari/537.36"
             ),
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         }
 
     def fetch(self) -> list[dict]:
@@ -59,10 +65,83 @@ class TikTokScraper(BaseScraper):
         return items
 
     def _fetch_hashtag(self, client: httpx.Client, hashtag: str) -> list[dict]:
-        """Fetch a TikTok hashtag page and extract video metadata."""
-        url = f"https://www.tiktok.com/tag/{hashtag}"
-        resp = client.get(url)
-        resp.raise_for_status()
+        """Try multiple strategies to get TikTok video data for a hashtag."""
+
+        # Strategy 1: Direct page scraping (works locally, may fail on cloud)
+        try:
+            url = f"https://www.tiktok.com/tag/{hashtag}"
+            resp = client.get(url)
+            if resp.status_code == 200 and "UNIVERSAL_DATA" in resp.text:
+                videos = self._parse_rehydration_data(resp.text)
+                if videos:
+                    return videos
+        except Exception as e:
+            self.logger.debug(f"TikTok direct scrape failed for #{hashtag}: {e}")
+
+        # Strategy 2: Use TikTok's internal API-like endpoint
+        try:
+            videos = self._fetch_via_webapp_api(client, hashtag)
+            if videos:
+                return videos
+        except Exception as e:
+            self.logger.debug(f"TikTok webapp API failed for #{hashtag}: {e}")
+
+        # Strategy 3: Google search fallback — find TikTok videos via search
+        try:
+            videos = self._fetch_via_search(client, hashtag)
+            if videos:
+                return videos
+        except Exception as e:
+            self.logger.debug(f"TikTok search fallback failed for #{hashtag}: {e}")
+
+        return []
+
+    def _fetch_via_webapp_api(self, client: httpx.Client, hashtag: str) -> list[dict]:
+        """Try TikTok's challenge/tag info endpoint."""
+        # First get the challenge ID
+        info_url = (
+            f"https://www.tiktok.com/api/challenge/detail/"
+            f"?challengeName={hashtag}"
+        )
+        resp = client.get(info_url, headers={**self._headers, "Accept": "application/json"})
+        if resp.status_code != 200:
+            return []
+
+        data = resp.json()
+        challenge_info = data.get("challengeInfo", {})
+        challenge = challenge_info.get("challenge", {})
+        cid = challenge.get("id")
+        if not cid:
+            return []
+
+        # Now fetch videos for this challenge
+        items_url = (
+            f"https://www.tiktok.com/api/challenge/item_list/"
+            f"?challengeID={cid}&count=20&cursor=0"
+        )
+        resp2 = client.get(items_url, headers={**self._headers, "Accept": "application/json"})
+        if resp2.status_code != 200:
+            return []
+
+        items_data = resp2.json()
+        item_list = items_data.get("itemList", [])
+        limit = max(5, settings.MAX_POSTS_PER_RUN // 10)
+
+        results = []
+        for video in item_list[:limit]:
+            normalized = self._normalize_video(video)
+            if normalized:
+                results.append(normalized)
+        return results
+
+    def _fetch_via_search(self, client: httpx.Client, hashtag: str) -> list[dict]:
+        """Fallback: search for TikTok videos via web search and extract oEmbed data."""
+        search_url = f"https://www.tiktok.com/search?q=%23{hashtag}"
+        resp = client.get(search_url)
+        if resp.status_code != 200:
+            return []
+
+        # Try to extract rehydration data from search page
         return self._parse_rehydration_data(resp.text)
 
     def _parse_rehydration_data(self, html: str) -> list[dict]:

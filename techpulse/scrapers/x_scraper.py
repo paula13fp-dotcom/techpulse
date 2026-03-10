@@ -2,10 +2,14 @@
 
 Searches for tech-related tweets by keyword and monitors key leaker/reviewer
 accounts. Requires X_USERNAME, X_EMAIL, X_PASSWORD in environment.
+
+Uses a background thread for asyncio.run() to avoid conflicts with Streamlit's
+own event loop.
 """
 from __future__ import annotations
 
 import asyncio
+import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -15,6 +19,30 @@ from techpulse.scrapers.base import BaseScraper
 
 _COOKIE_PATH = Path(__file__).resolve().parents[1] / "data" / "x_cookies.json"
 _COOKIE_MAX_AGE_HOURS = 23
+
+
+def _run_async(coro):
+    """Run an async coroutine from sync code, even inside an existing event loop.
+
+    Streamlit runs its own asyncio loop, so plain asyncio.run() raises
+    'cannot be called from a running event loop'. We run in a separate thread.
+    """
+    result = []
+    exception = []
+
+    def _runner():
+        try:
+            result.append(asyncio.run(coro))
+        except Exception as e:
+            exception.append(e)
+
+    thread = threading.Thread(target=_runner)
+    thread.start()
+    thread.join(timeout=180)  # 3 min max
+
+    if exception:
+        raise exception[0]
+    return result[0] if result else []
 
 
 class XScraper(BaseScraper):
@@ -29,7 +57,7 @@ class XScraper(BaseScraper):
         if not settings.has_x():
             return []
         try:
-            return asyncio.run(self._fetch_async())
+            return _run_async(self._fetch_async())
         except Exception as e:
             self.logger.error(f"X scraper failed: {e}")
             return []
